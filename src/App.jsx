@@ -123,7 +123,7 @@ function App() {
         <header className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-300 to-purple-400 bg-clip-text text-transparent">
-              💰 MoneyMaster Pro
+               @MONEYTRACK
             </h1>
             <p className="text-gray-300 text-sm mt-1">Управляй своими финансами с умом</p>
           </div>
