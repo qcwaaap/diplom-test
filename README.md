@@ -94,5 +94,5 @@ cd diplom-test
 git clone https://github.com/qcwaaap/diplom-test.git
 cd diplom-test
 установите зависимости 
-настройте подключение к MySQL
-запустите сервер
+настройте подключение к postgresql
+запустите сервер node server.js
