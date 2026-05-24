@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import Chart from 'chart.js/auto'
+import axios from 'axios'
+
+const API_URL = 'http://localhost:5000/api'
+const USER_ID = 1
 
 const StarBackground = () => {
   const stars = useRef([])
@@ -40,39 +44,64 @@ function App() {
   const [transactions, setTransactions] = useState([])
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState({ type: 'expense', amount: '', category: 'Еда', date: '', comment: '' })
+  const [summary, setSummary] = useState({ today_income: 0, today_expense: 0, balance: 0 })
   const chartRef = useRef(null)
 
   useEffect(() => {
-    const saved = localStorage.getItem('mm_transactions')
-    if (saved) setTransactions(JSON.parse(saved))
+    const fetchTransactions = async () => {
+      try {
+        const response = await axios.get(`${API_URL}/transactions?user_id=${USER_ID}`)
+        setTransactions(response.data)
+      } catch (error) {
+        console.error('Ошибка загрузки:', error)
+      }
+    }
+    fetchTransactions()
   }, [])
 
+  const fetchSummary = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/summary?user_id=${USER_ID}`)
+      return response.data
+    } catch (error) {
+      console.error('Ошибка загрузки статистики:', error)
+      return { today_income: 0, today_expense: 0, balance: 0 }
+    }
+  }
+
   useEffect(() => {
-    localStorage.setItem('mm_transactions', JSON.stringify(transactions))
+    const loadSummary = async () => {
+      const data = await fetchSummary()
+      setSummary(data)
+    }
+    loadSummary()
   }, [transactions])
 
-  const today = new Date().toISOString().slice(0,10)
-  const todayIncome = transactions.filter(t => t.type === 'income' && t.date === today).reduce((s,t)=> s+t.amount, 0)
-  const todayExpense = transactions.filter(t => t.type === 'expense' && t.date === today).reduce((s,t)=> s+t.amount, 0)
-
-  const balance = transactions.reduce((acc, t) => t.type === 'income' ? acc + t.amount : acc - t.amount, 0)
-
-  const addTransaction = () => {
+  const addTransaction = async () => {
     if (!form.amount || form.amount <= 0 || !form.category || !form.date) {
       alert('Заполните сумму, категорию и дату')
       return
     }
-    const newTransaction = {
-      id: Date.now(),
-      type: form.type,
-      amount: parseFloat(form.amount),
-      category: form.category,
-      date: form.date,
-      comment: form.comment
+
+    try {
+      await axios.post(`${API_URL}/transactions`, {
+        user_id: USER_ID,
+        type: form.type,
+        amount: parseFloat(form.amount),
+        category: form.category,
+        date: form.date,
+        comment: form.comment
+      })
+      
+      const response = await axios.get(`${API_URL}/transactions?user_id=${USER_ID}`)
+      setTransactions(response.data)
+      
+      setModalOpen(false)
+      setForm({ type: 'expense', amount: '', category: 'Еда', date: '', comment: '' })
+    } catch (error) {
+      console.error('Ошибка добавления:', error)
+      alert('Не удалось добавить транзакцию')
     }
-    setTransactions([newTransaction, ...transactions])
-    setModalOpen(false)
-    setForm({ type: 'expense', amount: '', category: 'Еда', date: '', comment: '' })
   }
 
   useEffect(() => {
@@ -138,16 +167,16 @@ function App() {
         <div className="grid md:grid-cols-3 gap-5 mb-8">
           <div className="glass-card p-5 text-white">
             <div className="text-sm opacity-80">💰 Доходы сегодня</div>
-            <div className="text-2xl font-bold text-green-300">{todayIncome.toLocaleString()} ₽</div>
+            <div className="text-2xl font-bold text-green-300">{summary.today_income.toLocaleString()} ₽</div>
           </div>
           <div className="glass-card p-5 text-white">
             <div className="text-sm opacity-80">💸 Расходы сегодня</div>
-            <div className="text-2xl font-bold text-red-300">{todayExpense.toLocaleString()} ₽</div>
+            <div className="text-2xl font-bold text-red-300">{summary.today_expense.toLocaleString()} ₽</div>
           </div>
           <div className="glass-card p-5 text-white">
             <div className="text-sm opacity-80">📈 Общий баланс</div>
-            <div className={`text-2xl font-bold ${balance >= 0 ? 'text-green-300' : 'text-red-300'}`}>
-              {balance.toLocaleString()} ₽
+            <div className={`text-2xl font-bold ${summary.balance >= 0 ? 'text-green-300' : 'text-red-300'}`}>
+              {summary.balance.toLocaleString()} ₽
             </div>
           </div>
         </div>
@@ -161,7 +190,7 @@ function App() {
             <div className="w-full md:w-1/3">
               <div className="text-xs opacity-80 mb-1">Цель на месяц: 50 000 ₽</div>
               <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
-                <div className="bg-gradient-to-r from-yellow-400 to-orange-500 h-2 rounded-full" style={{ width: `${Math.min(100, (balance / 50000) * 100)}%` }}></div>
+                <div className="bg-gradient-to-r from-yellow-400 to-orange-500 h-2 rounded-full" style={{ width: `${Math.min(100, (summary.balance / 50000) * 100)}%` }}></div>
               </div>
             </div>
           </div>
@@ -191,7 +220,7 @@ function App() {
                       </div>
                     </div>
                     <div className={`font-bold ${t.type === 'income' ? 'text-green-300' : 'text-red-300'}`}>
-                      {t.type === 'income' ? '+' : '-'} {t.amount.toLocaleString()} ₽
+                      {t.type === 'income' ? '+' : '-'} {Number(t.amount).toLocaleString()} ₽
                     </div>
                   </div>
                 ))
@@ -206,12 +235,12 @@ function App() {
               {(() => {
                 const expenses = transactions.filter(t => t.type === 'expense')
                 const cats = {}
-                expenses.forEach(e => cats[e.category] = (cats[e.category] || 0) + e.amount)
+                expenses.forEach(e => cats[e.category] = (cats[e.category] || 0) + Number(e.amount))
                 const total = Object.values(cats).reduce((a,b) => a+b, 0)
                 return Object.entries(cats).map(([name, amount]) => (
                   <div key={name} className="flex justify-between items-center p-2 border-b border-white/10">
                     <span className="flex items-center gap-2"><span className={`w-2 h-2 rounded-full ${categoryColors[name]}`}></span> {name}</span>
-                    <span>{amount.toLocaleString()} ₽ <span className="text-gray-400">({total ? ((amount/total)*100).toFixed(1) : 0}%)</span></span>
+                    <span>{Number(amount).toLocaleString()} ₽ <span className="text-gray-400">({total ? ((amount/total)*100).toFixed(1) : 0}%)</span></span>
                   </div>
                 ))
               })()}
